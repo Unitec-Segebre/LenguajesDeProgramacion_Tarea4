@@ -13,7 +13,7 @@ object Tarea4 {
   def main(args: Array[String]): Unit = {
       val server = HttpServer.create(new InetSocketAddress(8080), 0);
       server.createContext("/ejercicio1", new handler_ejercicio1());
-      // server.createContext("/ejercicio2", new handler_ejercicio2());
+      server.createContext("/ejercicio2", new handler_ejercicio2());
       // server.createContext("/ejercicio3", new handler_ejercicio3());
       server.start();
       println("Server up!");
@@ -22,7 +22,7 @@ object Tarea4 {
 
 class handler_ejercicio1() extends HttpHandler{
   override def handle(client: HttpExchange){
-      try{
+    try{
       if(client.getRequestMethod() == "POST"){
         val jsonReq = new JsonParser().parse(new String(scala.io.Source.fromInputStream(client.getRequestBody()).mkString)).getAsJsonObject();
         var mapsLink = "https://maps.googleapis.com/maps/api/directions/json?origin=ORIGIN&destination=DESTINATION&key=AIzaSyA7sQSQEOesLMKtCLmqISRpv7YHeWL67-c";
@@ -64,43 +64,54 @@ class handler_ejercicio1() extends HttpHandler{
   }
 }
 
-/*class handler_ejercicio2() extends HttpHandler{
+class handler_ejercicio2() extends HttpHandler{
   override def handle(client: HttpExchange){
-    if(client.getRequestMethod() == "POST"){
-      val jsonReq = JsonParser().parse(String(client.getRequestBody().readBytes())).getAsJsonObject();
-      var coordinatesLink = "https://maps.googleapis.com/maps/api/geocode/json?address=ADDRESS&key=AIzaSyDxkk38M1uRTyD6vw7OyBUQ8x_2W2qOsEU";
-      coordinatesLink = coordinatesLink.replace("ADDRESS", jsonReq.get("origen").getAsString().replace(" ", "+"));
-      var conn = URL(coordinatesLink).openConnection() as HttpURLConnection;
-      println(coordinatesLink);
-      conn.setRequestMethod("GET");
-      var mapsResp = String(conn.getInputStream().readBytes());
-      var nearMeLink = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=LAT,LNG&radius=3000&types=food&name=cruise&key=AIzaSyCx14BVgeJ89yixorOA7gaab-uscUWlNFU";
-      nearMeLink = nearMeLink.replace("LAT", JsonParser().parse(mapsResp).getAsJsonObject().get("results").getAsJsonArray().get(0).getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lat").getAsString());
-      nearMeLink = nearMeLink.replace("LNG", JsonParser().parse(mapsResp).getAsJsonObject().get("results").getAsJsonArray().get(0).getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lng").getAsString());
-      conn = URL(nearMeLink).openConnection() as HttpURLConnection;
-      conn.setRequestMethod("GET");
-      println(nearMeLink);
-      mapsResp = String(conn.getInputStream().readBytes());
-      var restaurantes = mutableMapOf<String, ArrayList<JsonObject>>();
-      restaurantes.put("restaurantes", ArrayList<JsonObject>());
-      for(location in JsonParser().parse(mapsResp).getAsJsonObject().get("results").getAsJsonArray()){
-        var temp = JsonObject();
-        temp.add("nombre", location.getAsJsonObject().get("name"));
-        temp.add("lat", location.getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lat"));
-        temp.add("lon", location.getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lng"));
-        restaurantes["restaurantes"]?.add(temp);
+    try{
+      if(client.getRequestMethod() == "POST"){
+        val jsonReq = new JsonParser().parse(new String(scala.io.Source.fromInputStream(client.getRequestBody()).mkString)).getAsJsonObject();
+        var coordinatesLink = "https://maps.googleapis.com/maps/api/geocode/json?address=ADDRESS&key=AIzaSyDxkk38M1uRTyD6vw7OyBUQ8x_2W2qOsEU";
+        coordinatesLink = coordinatesLink.replace("ADDRESS", jsonReq.get("origen").getAsString().replace(" ", "+"));
+        var conn = (new URL(coordinatesLink).openConnection()).asInstanceOf[HttpURLConnection];
+        conn.setRequestMethod("GET");
+        println(coordinatesLink);
+        var mapsResp = new String(scala.io.Source.fromInputStream(conn.getInputStream()).mkString);
+        var nearMeLink = "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=LAT,LNG&radius=3000&types=restaurant&name=cruise&key=AIzaSyCx14BVgeJ89yixorOA7gaab-uscUWlNFU";
+        nearMeLink = nearMeLink.replace("LAT", new JsonParser().parse(mapsResp).getAsJsonObject().get("results").getAsJsonArray().get(0).getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lat").getAsString());
+        nearMeLink = nearMeLink.replace("LNG", new JsonParser().parse(mapsResp).getAsJsonObject().get("results").getAsJsonArray().get(0).getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lng").getAsString());
+        conn = (new URL(nearMeLink).openConnection()).asInstanceOf[HttpURLConnection];
+        conn.setRequestMethod("GET");
+        println(nearMeLink);
+        mapsResp = new String(scala.io.Source.fromInputStream(conn.getInputStream()).mkString);
+        var restaurantes = Map[String, ArrayBuffer[JsonObject]]();
+        restaurantes("restaurantes") = new ArrayBuffer[JsonObject]();
+        val locations = new JsonParser().parse(mapsResp).getAsJsonObject().get("results").getAsJsonArray();
+        for(location <- locations){
+          var temp = new JsonObject();
+          temp.add("nombre", location.getAsJsonObject().get("name"));
+          temp.add("lat", location.getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lat"));
+          temp.add("lon", location.getAsJsonObject().get("geometry").getAsJsonObject().get("location").getAsJsonObject().get("lng"));
+          restaurantes("restaurantes") += temp;
+        }
+        var response = new GsonBuilder().create().toJson(restaurantes("restaurantes").asJava);
+        response = "{\"restaurantes\":" + response + "}";
+        client.getResponseHeaders().add("content-type", "json");
+        client.sendResponseHeaders(500, response.getBytes("UTF-8").size.asInstanceOf[Number].longValue);
+        client.getResponseBody().write(response.getBytes("UTF-8"));
+        client.getResponseBody().close();
+        println(jsonReq);
       }
-      val response = GsonBuilder().create().toJson(restaurantes).toByteArray();
+    }catch{
+      case _: Throwable =>
+      val response = "{\"error\": \"Opps, ha ocurrido un error :/\"}";
       client.getResponseHeaders().add("content-type", "json");
-      client.sendResponseHeaders(200, response.size.toLong());
-      client.getResponseBody().write(response);
+      client.sendResponseHeaders(500, response.getBytes("UTF-8").size.asInstanceOf[Number].longValue);
+      client.getResponseBody().write(response.getBytes("UTF-8"));
       client.getResponseBody().close();
-      println(jsonReq);
     }
   }
 }
 
-class handler_ejercicio3() extends HttpHandler{
+/*class handler_ejercicio3() extends HttpHandler{
   override def handle(client: HttpExchange){
     if(client.getRequestMethod() == "POST"){
       val jsonReq = JsonParser().parse(String(client.getRequestBody().readBytes())).getAsJsonObject();
