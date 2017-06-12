@@ -14,7 +14,7 @@ object Tarea4 {
       val server = HttpServer.create(new InetSocketAddress(8080), 0);
       server.createContext("/ejercicio1", new handler_ejercicio1());
       server.createContext("/ejercicio2", new handler_ejercicio2());
-      // server.createContext("/ejercicio3", new handler_ejercicio3());
+      server.createContext("/ejercicio3", new handler_ejercicio3());
       server.start();
       println("Server up!");
   }
@@ -111,32 +111,40 @@ class handler_ejercicio2() extends HttpHandler{
   }
 }
 
-/*class handler_ejercicio3() extends HttpHandler{
+class handler_ejercicio3() extends HttpHandler{
   override def handle(client: HttpExchange){
-    if(client.getRequestMethod() == "POST"){
-      val jsonReq = JsonParser().parse(String(client.getRequestBody().readBytes())).getAsJsonObject();
-      var decodedImg = Base64.getDecoder().decode(jsonReq.get("data").getAsString())
-      val decodedImgWidth = ByteBuffer.wrap(decodedImg.sliceArray(IntRange(0x12, 0x15)).reversedArray()).getInt();
-      val decodedImgHeight = ByteBuffer.wrap(decodedImg.sliceArray(IntRange(0x16, 0x19)).reversedArray()).getInt();
-      val decodedImgPixelArray = ByteBuffer.wrap(decodedImg.sliceArray(IntRange(0x0A, 0x0D)).reversedArray()).getInt();
+    try{
+      if(client.getRequestMethod() == "POST"){
+        val jsonReq = new JsonParser().parse(new String(scala.io.Source.fromInputStream(client.getRequestBody()).mkString)).getAsJsonObject();
+        var decodedImg = Base64.getDecoder().decode(jsonReq.get("data").getAsString())
+        val decodedImgWidth = (ByteBuffer.allocate(4).put(decodedImg.slice(0x12, 0x15).reverse).getInt(0))/256;
+        val decodedImgHeight = (ByteBuffer.allocate(4).put(decodedImg.slice(0x16, 0x19).reverse).getInt(0))/256;
+        val decodedImgPixelArray = (ByteBuffer.allocate(4).put(decodedImg.slice(0x0A, 0x0D).reverse).getInt(0))/256;
 
-      for(i in 0 until decodedImgHeight){
-        for(j in 0 until decodedImgWidth){
+        for(i <- 0 until decodedImgHeight; j <- 0 until decodedImgWidth){
+          // println(i, j)
           val pos = decodedImgPixelArray+(i*decodedImgWidth*4)+(j*4);
-          val greyPixel = ((decodedImg[pos+3] + decodedImg[pos+2] + decodedImg[pos+1])/3).toByte()
-          decodedImg[pos] = greyPixel
-          decodedImg[pos+1] = greyPixel
-          decodedImg[pos+2] = greyPixel
+          val greyPixel = ((decodedImg(pos+3) + decodedImg(pos+2) + decodedImg(pos+1))/3).asInstanceOf[Byte];
+          decodedImg(pos) = greyPixel;
+          decodedImg(pos+1) = greyPixel;
+          decodedImg(pos+2) = greyPixel;
         }
-      }
 
-      var encodedImg = mutableMapOf<String, String>();
-      encodedImg.put("data", String(Base64.getEncoder().encode(decodedImg)))
-      val response = GsonBuilder().create().toJson(encodedImg).toByteArray();
+        val encodedImg = Base64.getEncoder().encodeToString(decodedImg);
+        val response = "{\"nombre\":\"" + jsonReq.get("nombre").getAsString().replace(".", "(blanco y negro).") + ",\",\"data\":\"" + encodedImg + "\"}";
+        client.getResponseHeaders().add("content-type", "json");
+        client.sendResponseHeaders(200, response.getBytes("UTF-8").size.asInstanceOf[Number].longValue);
+        client.getResponseBody().write(response.getBytes("UTF-8"));
+        client.getResponseBody().close();
+      }
+    }catch{
+      case e: Throwable =>
+      e.printStackTrace();
+      val response = "{\"error\": \"Opps, ha ocurrido un error :/\"}";
       client.getResponseHeaders().add("content-type", "json");
-      client.sendResponseHeaders(200, response.size.toLong());
-      client.getResponseBody().write(response);
+      client.sendResponseHeaders(500, response.getBytes("UTF-8").size.asInstanceOf[Number].longValue);
+      client.getResponseBody().write(response.getBytes("UTF-8"));
       client.getResponseBody().close();
     }
   }
-}*/
+}
