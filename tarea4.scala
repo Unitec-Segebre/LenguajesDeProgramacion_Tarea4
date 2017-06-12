@@ -22,35 +22,44 @@ object Tarea4 {
 
 class handler_ejercicio1() extends HttpHandler{
   override def handle(client: HttpExchange){
-    if(client.getRequestMethod() == "POST"){
-      val jsonReq = new JsonParser().parse(new String(scala.io.Source.fromInputStream(client.getRequestBody()).mkString)).getAsJsonObject();
-      var mapsLink = "https://maps.googleapis.com/maps/api/directions/json?origin=ORIGIN&destination=DESTINATION&key=AIzaSyA7sQSQEOesLMKtCLmqISRpv7YHeWL67-c";
-      mapsLink = mapsLink.replace("ORIGIN", jsonReq.get("origen").getAsString().replace(" ", "+"));
-      mapsLink = mapsLink.replace("DESTINATION", jsonReq.get("destino").getAsString().replace(" ", "+"));
-      val conn = (new URL(mapsLink).openConnection()).asInstanceOf[HttpURLConnection];
-      conn.setRequestMethod("GET");
-      val mapsResp = new String(scala.io.Source.fromInputStream(conn.getInputStream()).mkString);
-      val routeOnMaps = new JsonParser().parse(mapsResp).getAsJsonObject().get("routes").getAsJsonArray().get(0).getAsJsonObject().get("legs").getAsJsonArray().get(0).getAsJsonObject().get("steps").getAsJsonArray();
-      var ruta = Map[String, ArrayBuffer[JsonObject]]();
-      ruta("ruta") = new ArrayBuffer[JsonObject]();
-      //println(routeOnMaps);
-      var temp = new JsonObject();
-      temp.add("lat", routeOnMaps.get(0).getAsJsonObject().get("start_location").getAsJsonObject().get("lat"));
-      temp.add("lon", routeOnMaps.get(0).getAsJsonObject().get("start_location").getAsJsonObject().get("lng"));
-      ruta("ruta") += temp;
-      for(location <- routeOnMaps){
-        temp = new JsonObject();
-        temp.add("lat", location.getAsJsonObject().get("end_location").getAsJsonObject().get("lat"));
-        temp.add("lon", location.getAsJsonObject().get("end_location").getAsJsonObject().get("lng"));
+      try{
+      if(client.getRequestMethod() == "POST"){
+        val jsonReq = new JsonParser().parse(new String(scala.io.Source.fromInputStream(client.getRequestBody()).mkString)).getAsJsonObject();
+        var mapsLink = "https://maps.googleapis.com/maps/api/directions/json?origin=ORIGIN&destination=DESTINATION&key=AIzaSyA7sQSQEOesLMKtCLmqISRpv7YHeWL67-c";
+        mapsLink = mapsLink.replace("ORIGIN", jsonReq.get("origen").getAsString().replace(" ", "+"));
+        mapsLink = mapsLink.replace("DESTINATION", jsonReq.get("destino").getAsString().replace(" ", "+"));
+        val conn = (new URL(mapsLink).openConnection()).asInstanceOf[HttpURLConnection];
+        conn.setRequestMethod("GET");
+        val mapsResp = new String(scala.io.Source.fromInputStream(conn.getInputStream()).mkString);
+        val routeOnMaps = new JsonParser().parse(mapsResp).getAsJsonObject().get("routes").getAsJsonArray().get(0).getAsJsonObject().get("legs").getAsJsonArray().get(0).getAsJsonObject().get("steps").getAsJsonArray();
+        var ruta = Map[String, ArrayBuffer[JsonObject]]();
+        ruta("ruta") = new ArrayBuffer[JsonObject]();
+        var temp = new JsonObject();
+        temp.add("lat", routeOnMaps.get(0).getAsJsonObject().get("start_location").getAsJsonObject().get("lat"));
+        temp.add("lon", routeOnMaps.get(0).getAsJsonObject().get("start_location").getAsJsonObject().get("lng"));
         ruta("ruta") += temp;
+        for(location <- routeOnMaps){
+          temp = new JsonObject();
+          temp.add("lat", location.getAsJsonObject().get("end_location").getAsJsonObject().get("lat"));
+          temp.add("lon", location.getAsJsonObject().get("end_location").getAsJsonObject().get("lng"));
+          ruta("ruta") += temp;
+        }
+        var response = new GsonBuilder().create().toJson(ruta("ruta").asJava);
+        response = "{\"ruta\":"+response+"}";
+        client.getResponseHeaders().add("content-type", "json");
+        client.sendResponseHeaders(200, response.getBytes("UTF-8").size.asInstanceOf[Number].longValue);
+        client.getResponseBody().write(response.getBytes("UTF-8"));
+        client.getResponseBody().close();
+        println(jsonReq);
+        println(mapsLink);
       }
-      val response = new GsonBuilder().create().toJson(ruta("ruta").asJava);
+    }catch{
+      case _: Throwable =>
+      val response = "{\"error\": \"Opps, ha ocurrido un error :/\"}";
       client.getResponseHeaders().add("content-type", "json");
-      client.sendResponseHeaders(200, response.getBytes("UTF-8").size.asInstanceOf[Number].longValue);
+      client.sendResponseHeaders(500, response.getBytes("UTF-8").size.asInstanceOf[Number].longValue);
       client.getResponseBody().write(response.getBytes("UTF-8"));
       client.getResponseBody().close();
-      println(jsonReq);
-      println(mapsLink);
     }
   }
 }
